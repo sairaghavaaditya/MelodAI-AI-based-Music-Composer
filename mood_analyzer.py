@@ -1,132 +1,137 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from sentence_transformers import SentenceTransformer, util
+# mood_analyzer.py
+
 import torch
 import numpy as np
-from scipy.special import softmax # Import softmax from scipy
-from config import Config # Assuming config.py is in the same directory
-from music_parameters import *
+from transformers import pipeline, AutoTokenizer, AutoModelForSequenceClassification
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+from config import Config
+
 class MoodAnalyzer:
     """
-    Analyzes user input text to determine mood, sentiment, and energy level,
-    then maps these to musical parameters.
+    Analyzes user text to determine mood, sentiment, and energy level,
+    and maps these to musical parameters.
     """
     def __init__(self):
-        """
-        Initializes sentiment analysis model, embedding model,
-        and pre-computes embeddings for mood categories.
-        """
-        print(f"Loading sentiment model: {Config.SENTIMENT_MODEL} to {Config.DEVICE}")
-        self.sentiment_tokenizer = AutoTokenizer.from_pretrained(Config.SENTIMENT_MODEL)
-        self.sentiment_model = AutoModelForSequenceClassification.from_pretrained(Config.SENTIMENT_MODEL)
-        self.sentiment_model.to(Config.DEVICE) # Move model to specified device
-        self.sentiment_model.eval() # Set model to evaluation mode
+        """Initializes the models and pre-computes mood embeddings."""
+        self.sentiment_model = None
+        self.sentiment_tokenizer = None
+        self.embedding_model = None
+        self.mood_embeddings = None
+        self.mood_categories = ["happy", "sad", "calm", "energetic", "mysterious", "romantic"]
+        self.device = Config.DEVICE
 
-        print(f"Loading embedding model: {Config.EMBEDDING_MODEL}")
-        self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL)
-        self.embedding_model.to(Config.DEVICE) # Move model to specified device
-        self.embedding_model.eval() # Set model to evaluation mode
+        self._load_models()
+        self._precompute_mood_embeddings()
 
-        # Define mood categories and pre-compute their embeddings
-        self.mood_categories = {
-            "happy": "joyful, cheerful, ecstatic, delighted",
-            "sad": "depressed, sorrowful, melancholic, gloomy",
-            "calm": "peaceful, tranquil, serene, relaxed",
-            "energetic": "vibrant, lively, enthusiastic, active",
-            "mysterious": "enigmatic, strange, secretive, suspenseful",
-            "romantic": "loving, passionate, intimate, tender"
-        }
-        self.mood_embeddings = self._precompute_mood_embeddings()
-        print("Now you can start generate music...")
+    def _load_models(self):
+        """Loads the Hugging Face models for sentiment analysis and embeddings."""
+        try:
+            print(f"Loading sentiment model: {Config.SENTIMENT_MODEL} to {self.device}")
+            self.sentiment_tokenizer = AutoTokenizer.from_pretrained(Config.SENTIMENT_MODEL)
+            self.sentiment_model = AutoModelForSequenceClassification.from_pretrained(Config.SENTIMENT_MODEL)
+            self.sentiment_model.to(self.device)
 
-        # Energy level keywords (simple approach)
-        self.high_energy_words = ["excited", "energetic", "thrilled", "fast", "upbeat", "workout", "lively", "vibrant", "dynamic", "intense"]
-        self.low_energy_words = ["calm", "relaxed", "sleepy", "slow", "peaceful", "quiet", "mellow", "tranquil", "chill", "soft"]
+            print(f"Loading embedding model: {Config.EMBEDDING_MODEL}")
+            self.embedding_model = SentenceTransformer(Config.EMBEDDING_MODEL)
+            self.embedding_model.to(self.device)
+
+        except Exception as e:
+            print(f"Error loading models: {e}")
+            self.sentiment_model = None
+            self.embedding_model = None
 
     def _precompute_mood_embeddings(self):
-        """
-        Generates embeddings for defined mood categories.
-        """
+        """Creates and stores vector embeddings for the mood categories."""
+        if not self.embedding_model:
+            print("Embedding model not loaded. Cannot pre-compute embeddings.")
+            return
+
         print("Pre-computing mood embeddings...")
-        mood_sentences = [self.mood_categories[m] for m in self.mood_categories]
-        # Encode sentences in batches for efficiency
-        with torch.no_grad():
-            embeddings = self.embedding_model.encode(mood_sentences, convert_to_tensor=True, device=Config.DEVICE)
-        return {mood: embeddings[i] for i, mood in enumerate(self.mood_categories.keys())}
+        self.mood_embeddings = self.embedding_model.encode(self.mood_categories)
 
-    def _get_sentiment(self, text):
-        """
-        Determines the sentiment (positive, neutral, negative) of the text.
-        Returns sentiment label and confidence score.
-        """
-        encoded_input = self.sentiment_tokenizer(text, return_tensors='pt', max_length=Config.MAX_LENGTH, truncation=True).to(Config.DEVICE)
-        with torch.no_grad():
-            output = self.sentiment_model(**encoded_input)
-        scores = output.logits[0].cpu().numpy()
-        scores = softmax(scores) # Apply softmax to get probabilities
+    def _get_sentiment(self, text: str) -> dict:
+        """Analyzes text sentiment (positive, negative, neutral)."""
+        if not self.sentiment_model or not self.sentiment_tokenizer:
+            return {"label": "neutral", "score": 0.5}
 
-        # Sentiment labels for roberta-base-sentiment-latest:
-        # 0: negative, 1: neutral, 2: positive
-        labels = ['negative', 'neutral', 'positive']
-        sentiment_id = np.argmax(scores)
-        sentiment_label = labels[sentiment_id]
-        confidence = scores[sentiment_id]
-        return sentiment_label, confidence
+        encoded_text = self.sentiment_tokenizer(text, return_tensors='pt', truncation=True, padding=True)
+        encoded_text.to(self.device)
+        output = self.sentiment_model(**encoded_text)
+        scores = torch.softmax(output.logits, dim=1).squeeze().tolist()
+        
+        # Get the label with the highest score
+        labels = ["negative", "neutral", "positive"]
+        sentiment_label = labels[scores.index(max(scores))]
+        sentiment_score = max(scores)
 
-    def _get_mood_category(self, text):
-        """
-        Classifies the text into one of the predefined mood categories
-        using cosine similarity with pre-computed embeddings.
-        """
-        with torch.no_grad():
-            user_embedding = self.embedding_model.encode(text, convert_to_tensor=True, device=Config.DEVICE)
+        return {"label": sentiment_label, "score": sentiment_score}
 
-        similarities = {}
-        for mood, mood_embedding in self.mood_embeddings.items():
-            similarity = util.cos_sim(user_embedding, mood_embedding)
-            similarities[mood] = similarity.item() # .item() to get scalar from tensor
+    def _classify_mood(self, text: str) -> str:
+        """Finds the closest mood category based on text similarity."""
+        if not self.embedding_model or self.mood_embeddings is None:
+            return "calm"
 
-        closest_mood = max(similarities, key=similarities.get)
-        return closest_mood, similarities[closest_mood]
+        user_embedding = self.embedding_model.encode([text])[0]
+        
+        # Reshape for cosine similarity calculation
+        user_embedding = user_embedding.reshape(1, -1)
+        
+        # Calculate cosine similarity between the user text and mood categories
+        similarities = cosine_similarity(user_embedding, self.mood_embeddings)[0]
+        
+        # Find the index of the highest similarity score
+        best_mood_index = np.argmax(similarities)
+        
+        # Print for debugging
+        print(f"Calculated similarities: {similarities}")
+        print(f"Closest mood: {self.mood_categories[best_mood_index]}")
 
-    def _calculate_energy_level(self, text, sentiment):
-        """
-        Calculates an energy level (1-10) based on keywords and sentiment.
-        """
+        return self.mood_categories[best_mood_index]
+
+    def _calculate_energy_level(self, text: str, sentiment: str) -> int:
+        """Calculates an energy level from 1-10 based on keywords and sentiment."""
+        high_energy_words = ["energetic", "upbeat", "fast", "powerful", "excited", "happy", "joyful", "party"]
+        low_energy_words = ["calm", "slow", "peaceful", "sad", "sleepy", "down", "quiet", "serene"]
+
+        energy_score = 5 # Start at a neutral value
+        
+        # Adjust based on sentiment
+        if sentiment == "positive":
+            energy_score += 2
+        elif sentiment == "negative":
+            energy_score -= 2
+
+        # Adjust based on keywords
         text_lower = text.lower()
-        high_energy_count = sum(1 for word in self.high_energy_words if word in text_lower)
-        low_energy_count = sum(1 for word in self.low_energy_words if word in text_lower)
+        for word in high_energy_words:
+            if word in text_lower:
+                energy_score += 1
+        for word in low_energy_words:
+            if word in text_lower:
+                energy_score -= 1
+        
+        # Clamp the score to a 1-10 range
+        energy_score = max(1, min(10, energy_score))
+        
+        # Print for debugging
+        print(f"Calculated energy level: {energy_score}")
+        
+        return energy_score
 
-        base_energy = 5 # Start with a neutral energy
+    def analyze(self, text: str) -> dict:
+        """Main analysis function to get all musical parameters."""
+        if not self.sentiment_model or not self.embedding_model:
+            print("Models not loaded, cannot perform analysis.")
+            return None
 
-        # Adjust base energy based on sentiment
-        if sentiment == 'positive':
-            base_energy += 2
-        elif sentiment == 'negative':
-            base_energy -= 1 # Sad can still have some energy, but less
-
-        # Adjust based on keyword counts
-        energy_from_keywords = (high_energy_count * 2) - (low_energy_count * 1)
-        final_energy = base_energy + energy_from_keywords
-
-        # Clamp the energy level between 1 and 10
-        final_energy = max(1, min(10, final_energy))
-        return final_energy
-
-    def analyze(self, user_text):
-        """
-        Main analysis function to process user text and return musical parameters.
-        """
-        sentiment_label, sentiment_confidence = self._get_sentiment(user_text)
-        mood_category, mood_similarity = self._get_mood_category(user_text)
-        energy_level = self._calculate_energy_level(user_text, sentiment_label)
-
-        # Map to musical parameters
-        musical_params = get_musical_parameters(mood_category, sentiment_label, energy_level)
-
+        sentiment = self._get_sentiment(text)
+        mood_classification = self._classify_mood(text)
+        energy_level = self._calculate_energy_level(text, sentiment["label"])
+        
         return {
-            "user_text": user_text,
-            "sentiment": {"label": sentiment_label, "confidence": f"{sentiment_confidence:.2f}"},
-            "mood": {"category": mood_category, "similarity": f"{mood_similarity:.2f}"},
-            "energy_level": energy_level,
-            "musical_parameters": musical_params
+            "mood_classification": mood_classification,
+            "sentiment": sentiment,
+            "energy_level": energy_level
         }
+

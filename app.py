@@ -8,7 +8,6 @@ from music_parameters import get_musical_parameters
 from music_generator import MusicGenerator
 
 # --- Corrected placement ---
-# st.set_page_config() must be the very first Streamlit command.
 st.set_page_config(
     page_title="MelodAI: AI-based Music Composer",
     page_icon="🎶",
@@ -24,6 +23,16 @@ def load_models():
     return MoodAnalyzer(), MusicGenerator()
 
 analyzer, generator = load_models()
+
+# A cache for the analysis results to prevent re-running on every change
+@st.cache_data
+def analyze_text_with_cache(text):
+    """
+    Analyzes the text and caches the result based on the text input.
+    This function will re-run only when the `text` argument changes.
+    """
+    return analyzer.analyze(text)
+
 
 # --- Streamlit UI Setup ---
 st.markdown(
@@ -107,7 +116,8 @@ if st.button("Generate Music"):
     if user_input:
         # Step 1: Analyze Mood
         with st.spinner("Analyzing your mood and generating parameters..."):
-            mood_analysis_result = analyzer.analyze(user_input)
+            # Use the cache-based function
+            mood_analysis_result = analyze_text_with_cache(user_input)
             
             if mood_analysis_result:
                 # Correctly extract the string values from the nested dictionaries
