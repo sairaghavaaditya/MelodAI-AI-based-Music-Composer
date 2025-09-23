@@ -1,0 +1,19 @@
+{% extends 'composer/base.html' %}
+{% block title %}My Tracks | MelodiAI{% endblock %}
+{% block content %}
+<h1 class="mb-4">My Generated Tracks</h1>
+<div class="list-group">
+    {% for item in compositions %}
+        <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="{% url 'composer:result' item.pk %}">
+            <span>
+                <strong>{{ item.title }}</strong>
+                <small class="text-muted">— {{ item.get_genre_display }} | {{ item.tempo_bpm }} BPM | {{ item.created_at }}</small>
+            </span>
+            <span class="badge text-bg-secondary">{{ item.length_seconds }}s</span>
+        </a>
+    {% empty %}
+        <div class="alert alert-info">No tracks yet. <a href="{% url 'composer:compose' %}">Compose your first track</a>.</div>
+    {% endfor %}
+{% endblock %}
+
+

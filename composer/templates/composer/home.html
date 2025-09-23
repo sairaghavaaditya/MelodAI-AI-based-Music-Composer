@@ -1,0 +1,13 @@
+{% extends 'composer/base.html' %}
+{% block title %}Compose | MelodiAI{% endblock %}
+{% block content %}
+<h1 class="mb-4">Compose a New Track</h1>
+<form method="post" action="{% url 'composer:compose' %}">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn btn-primary">Generate</button>
+    <a href="{% url 'composer:history' %}" class="btn btn-link">View History</a>
+</form>
+{% endblock %}
+
+

@@ -1,0 +1,128 @@
+Requirements for AI-Based Music Composition System (Django + PostgreSQL)
+1. Overview
+
+The AI-Based Music Composition System is a web application built with Django. It allows users to generate and manage AI-composed music tracks. The system will have both frontend and backend implemented in Django, with PostgreSQL as the database for robust data storage. The application will provide a smooth end-user experience, enabling music composition, playback, saving, and sharing functionalities.
+
+2. Functional Requirements
+2.1 User Management
+
+Users should be able to register and log in/out.
+
+Support user authentication and authorization.
+
+Users can manage their profiles (username, email, preferences).
+
+2.2 Music Composition
+
+Users should be able to input:
+
+A mood/genre/theme (e.g., happy, jazz, classical).
+
+Optional parameters like instruments, tempo, or length.
+
+The backend should invoke an AI model to generate a composition.
+
+The composition should be saved in MIDI or MP3 format.
+
+2.3 Music Playback and Download
+
+Users should be able to play generated tracks directly on the site.
+
+Users should be able to download compositions.
+
+Provide a playlist feature to organize generated music.
+
+2.4 History & Storage
+
+Users can view a history of their generated tracks.
+
+Each track should include metadata (date, genre, duration, model used).
+
+Tracks and metadata should be stored in PostgreSQL.
+
+2.5 Admin Panel
+
+Admins can manage users and compositions.
+
+Admins can monitor system usage (e.g., number of tracks generated).
+
+3. Non-Functional Requirements
+
+Robust database management using PostgreSQL.
+
+Responsive frontend built with Django templates (Bootstrap/HTML/CSS/JS).
+
+Handle multiple concurrent requests without performance degradation.
+
+Ensure data persistence (tracks and metadata remain after server restart).
+
+Provide clear error handling (invalid inputs, AI model failure, etc.).
+
+Secure endpoints with proper authentication and permissions.
+
+4. Technology Stack
+
+Backend Framework: Django (Python)
+
+Frontend: Django Templates (Bootstrap/HTML/JS for UI)
+
+Database: PostgreSQL
+
+AI Model Integration: Python-based model for music generation (can use pre-trained models like Magenta or RNN/LSTM).
+
+File Handling: Store music files on disk or cloud (linked in DB).
+
+5. Future Enhancements
+
+Add collaborative features (multiple users editing/composing together).
+
+Add user feedback loop (rate tracks to improve AI).
+
+Provide export to different formats (WAV, FLAC).
+
+Integrate streaming/sharing options (e.g., share to social media).
+
+Offer a mobile-friendly PWA (Progressive Web App) experience.
+
+
+
+following is the architecture of the project:
+
+melodiAI/
+├── melodiAI/         # Django's root project
+│   ├── settings.py
+│   ├── urls.py
+│   └── ...
+├── composer/                 # Your primary app for AI music generation
+│   ├── migrations/
+│   ├── templates/            # Frontend Templates for this app
+│   │   └── composer/
+│   │       ├── base.html     # Base template for all pages
+│   │       ├── home.html     # The main page for composition
+│   │       ├── result.html   # Page to display the generated music
+│   │       └── ...
+│   ├── static/               # Static files (CSS, JS, images)
+│   │   └── composer/
+│   │       ├── css/
+│   │       │   └── style.css
+│   │       ├── js/
+│   │       │   └── main.js   # Your frontend logic for music playback, etc.
+│   │       └── images/
+│   ├── urls.py               # URLs for this app
+│   ├── views.py              # Backend logic (calls your AI model)
+│   ├── models.py             # Database models (e.g., SavedCompositions)
+│   └── forms.py              # User forms (e.g., for composition parameters)
+├── accounts/                 # A dedicated app for user management
+│   ├── migrations/
+│   ├── templates/
+│   │   └── accounts/
+│   │       ├── login.html
+│   │       └── signup.html
+│   ├── urls.py
+│   ├── views.py
+│   └── ...
+├── media/                    # For user-uploaded files (optional)
+│   └── compositions/
+├── requirements.txt          # A list of all project dependencies
+├── README.md                 # Project description and setup instructions
+└── manage.py

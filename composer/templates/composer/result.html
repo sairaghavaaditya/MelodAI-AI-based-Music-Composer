@@ -1,0 +1,21 @@
+{% extends 'composer/base.html' %}
+{% block title %}Result | MelodiAI{% endblock %}
+{% block content %}
+<h1 class="mb-3">{{ composition.title }}</h1>
+<p class="text-muted">Generated on {{ composition.created_at }} | Genre: {{ composition.get_genre_display }} | Tempo: {{ composition.tempo_bpm }} BPM</p>
+
+{% if composition.audio_file %}
+<audio controls class="w-100">
+    <source src="{{ composition.audio_file.url }}" type="audio/wav">
+    Your browser does not support the audio element.
+    </audio>
+    <div class="mt-3">
+        <a href="{% url 'composer:download' composition.pk %}" class="btn btn-success">Download</a>
+        <a href="{% url 'composer:compose' %}" class="btn btn-secondary">Compose Another</a>
+    </div>
+{% else %}
+<div class="alert alert-warning">No audio available.</div>
+{% endif %}
+{% endblock %}
+
+

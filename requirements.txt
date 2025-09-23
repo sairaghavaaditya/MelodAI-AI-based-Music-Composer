@@ -1,0 +1,11 @@
+Django>=5.2,<6.0
+psycopg[binary]>=3.2
+celery>=5.3
+redis>=5.0
+whitenoise>=6.6
+python-dotenv>=1.0
+
+# For optional AI/music work in the future (kept out to stay lightweight)
+# magenta
+# pretty_midi
+
